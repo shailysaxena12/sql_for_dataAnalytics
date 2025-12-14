@@ -1,0 +1,108 @@
+---triggers
+-----indexes
+CREATE DATABASE School_db3
+
+CREATE TABLE Employe(
+EmployeeID INT IDENTITY PRIMARY KEY,
+FirstName NVARCHAR(50),
+LastName NVARCHAR(50),
+Department NVARCHAR(50),
+Salary INT
+);
+ 
+ INSERT INTO Employe (FirstName , LastName , Department, Salary)
+SELECT TOP (500000)
+ LEFT(NEWID(), 8), -- random first name
+ LEFT(NEWID(), 8), -- random last name
+ CASE ABS(CHECKSUM(NEWID())) % 5
+ WHEN 0 THEN  'IT'
+ WHEN 1 THEN  'HR'
+ WHEN 2 THEN  'Finance'
+ WHEN 3 THEN  'Marketing'
+ ELSE 'Sales'
+ END,
+  ABS(CHECKSUM(NEWID())) % 100000 + 30000
+
+  FROM sys.objects a
+ CROSS JOIN sys.objects b;
+
+SELECT * FROM Employe
+
+--indexing
+
+SET STATISTICS TIME ON;
+SET STATISTICS IO ON;
+
+DBCC DROPCLEANBUFFERS
+SELECT * FROM Employe WHERE Department ='IT'
+
+CREATE INDEX dept
+ON Employe(Department)
+
+
+----delete indexing 
+DROP INDEX dept ON Employe
+
+EXEC sp_helpindex 'Employe'
+
+-----SECOND TABLE that be changed with new salary
+CREATE TABLE SalaryAudit (
+AuditID INT IDENTITY PRIMARY KEY,
+EmpID INT,
+OldSalary DECIMAL(10,2),
+NewSalary DECIMAL(10,2),
+ChangedDate DATETIME DEFAULT GETDATE()
+);
+
+SELECT * FROM Employe
+SELECT * FROM SalaryAudit
+--triggers   action -----> reaction
+
+
+-------trigger for update salary
+CREATE TRIGGER trg_updateSalary
+ON Employe
+AFTER UPDATE 
+AS
+BEGIN
+IF UPDATE(Salary)
+BEGIN
+	INSERT INTO SalaryAudit (EmpID , OldSalary, NewSalary)
+	SELECT 
+	d.EmployeeID, 
+	d.Salary, 
+	i.Salary
+	FROM deleted d INNER JOIN inserted i
+	ON i.EmployeeID = d.EmployeeID
+END
+
+END
+
+EXEC sp_helptrigger 'Employe'
+
+UPDATE Employe 
+SET Salary = 10000 
+WHERE EmployeeID = 2
+
+INSERT INTO Employe VALUES('HFDHF' ,'FEF' ,'hr','3849')
+INSERT INTO SalaryAudit VALUES('2' ,'5653' ,'45423','12-12-2025')
+
+---trigger of insert data--------------
+
+CREATE TRIGGER trg_insertEmployee2
+ON Employe
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO SalaryAudit(EmpID, OldSalary, NewSalary)
+    SELECT i.EmployeeID, null, i.Salary
+    FROM inserted i;
+END
+
+
+INSERT INTO SalaryAudit(EmpID, OldSalary, NewSalary)
+VALUES (3, 42736, 8000);
+
+DROP TABLE IF EXISTS EmployeeAudit;
+DROP TABLE IF EXISTS Employee;
+DROP TRIGGER IF EXISTS trg_insertEmployee;
