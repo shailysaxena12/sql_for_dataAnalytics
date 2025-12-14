@@ -1,0 +1,280 @@
+
+---------string method
+
+use school_db2
+
+select CONCAT(fname,'- ' ,lname) from employees
+select CONCAT_WS(':', emp_id,fname ,lname) from employees
+
+SELECT SUBSTRING('SHAILY',2,4)
+
+SELECT REPLACE (department , 'sales','sales executive') FROM employees
+
+SELECT REVERSE('hello')
+SELECT LEN( email ) as email_length FROM employees
+SELECT LEN(fname) as first_name_col FROM employees
+
+SELECT CHARINDEX('E','HELLO WORLD',5)
+
+SELECT GETDATE()
+SELECT DATEADD( YEAR, 3 , GETDATE())
+SELECT DATEDIFF(MONTH , '2025-07-10', GETDATE())
+
+SELECT YEAR(GETDATE())
+SELECT FORMAT(GETDATE(),'MM/dd/yy')
+
+---------------------VIEW------------------------------
+
+CREATE VIEW emp_det AS
+SELECT department, AVG(salary) avg_spp
+FROM employees GROUP BY department
+
+SELECT * FROM emp_det
+
+SELECT TABLE_SCHEMA , TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS
+
+sp_helptext 'emp_det'
+
+
+-------WINDOW FUNCTION -------------------------------------------
+
+SELECT SUM(salary)
+OVER()
+FROM employees
+
+SELECT fname, salary , SUM(salary) OVER() salary_sum ,
+CAST(salary*100/SUM(salary) OVER() AS DECIMAL(5,2)) salary_pct
+FROM employees
+
+SELECT fname , salary, department, 
+SUM(salary) OVER(PARTITION BY department)
+salary_sum FROM employees
+
+SELECT 
+fname, salary, department,hire_date,
+LAG(salary) OVER(ORDER BY hire_date DESC ) lag_value,
+salary - LAG(salary) OVER(ORDER BY hire_date DESC ) diff_value
+FROM employees
+
+SELECT fname, department, salary, SUM(salary)
+OVER(PARTITION BY department ORDER BY emp_id , salary DESC) FROM employees
+
+SELECT * FROM employees
+
+SELECT fname, department , salary , hire_date, 
+SUM(salary) OVER(ORDER BY salary DESC
+ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+)
+FROM employees
+
+SELECT 
+fname, department , salary , hire_date, AVG(salary)
+OVER( ORDER BY hire_date DESC 
+ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
+) AS three_mobing_avg
+FROM employees
+
+SELECT fname, department, salary,
+LAST_VALUE(fname) OVER(
+PARTITION BY department
+ORDER BY fname
+ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) AS last_in_dept
+FROM employees;
+
+-------------------
+SELECT department , AVG(salary) avg_col FROM employees GROUP BY department
+
+
+WITH avg_sal AS(
+SELECT department, AVG(salary) ag_col
+FROM employees GROUP BY department
+)
+
+SELECT 
+e.fname , e.department ,e.salary, a.ag_col
+FROM employees e JOIN avg_sal a
+ON e.department = a.department
+WHERE e.salary > a.ag_col
+ 
+ SELECT * FROM employees
+ use school_db2
+
+ ----------------we want to find the highest-paid employee in each department
+
+ WITH maxsal As (
+ SELECT department ,
+ MAX(salary) dept_max
+ FROM employees
+ GROUP BY department
+ )
+
+ SELECT 
+ *
+ FROM employees e JOIN maxsal m
+ ON e.department = m.dept_max
+ WHERE salary = m.dept_max
+ 
+ --------------------------stored routine
+
+ CREATE PROCEDURE get_emp1
+
+ AS
+ BEGIN
+ SELECT * FROM employees where department = 'Sales'
+ END
+
+ EXEC get_emp1
+ ----------------------------- STORED PROCEDURE--------------------
+
+ CREATE PROCEDURE new_data
+ @sp_dept VARCHAR(100)
+ AS
+ BEGIN 
+ SELECT * FROM employees 
+ WHERE department= @sp_dept
+
+ END
+ EXEC new_data 'Sales'
+
+ ---------------------------------------------------------
+
+ ----this query is used for when you want to see how many create procedure 
+
+ SELECT ROUTINE_NAME
+ FROM INFORMATION_SCHEMA.ROUTINES
+ WHERE ROUTINE_TYPE ='PROCEDURE'
+ ------------------------------------------------------
+
+ sp_helptext 'get_emp'
+
+ CREATE PROCEDURE get_data2
+ @p_dept VARCHAR(100),
+ @dept_avg NUMERIC(10,2) OUTPUT
+ AS
+ BEGIN
+ SELECT 
+ @dept_avg = AVG(salary) 
+ FROM employees WHERE department = @p_dept
+ END
+
+ DECLARE @result NUMERIC(10,2)
+ EXEC get_data2 'Sales', @result OUTPUT
+ SELECT @result
+
+ CREATE PROCEDURE get_data3 
+ @sp_det VARCHAR(100),
+ @avg NUMERIC(10,2) OUTPUT
+ AS
+ BEGIN
+ SELECT
+ @avg =AVG(salary) 
+ FROM employees WHERE department =@sp_det
+ END
+
+ --STORED PROCEDURE
+ --procedure logic
+
+ /* create a procedure to update an employee salary only if the new salary 
+ is a raise greater than the current salary we also want to return a message
+ about what happened 
+*/
+SELECT * FROM employees
+EXEC sp_help 'employees'
+
+
+---SP WITH OUTPUT PARAMETERS---------------
+
+CREATE PROCEDURE update_emp_sal_sp
+@p_emp_id INT,
+@p_new_sal NUMERIC(10,2),
+@p_err_mess VARCHAR(100) OUTPUT
+AS
+BEGIN
+--CHECK EMP ID IS EXISTS OR NOT
+	IF NOT EXISTS(SELECT 1 FROM employees WHERE emp_id =@p_emp_id)
+	BEGIN
+
+		SET @p_err_mess ='EMPLOYE ID DOES NOT EXISTS!!!!'
+		RETURN;
+	END
+
+	--GETTING CURRENT SALARY
+	DECLARE @curr_sal NUMERIC(10,2)
+	SELECT 
+	@curr_sal = salary 
+	FROM employees WHERE emp_id = @p_emp_id
+
+	IF @p_new_sal > @curr_sal
+	BEGIN
+		UPDATE employees
+		SET salary = @p_new_sal
+		WHERE emp_id =@p_emp_id
+
+		SET @p_err_mess = 'EMPLOYE SALARY UPDATED'
+		
+	END
+ELSE
+	BEGIN
+			SET @p_err_mess = 'EMPLOYE CURRENT SALARY IS GREATER 
+			THAN ENTERED SALARY !! SALARY NOT UPDATED!!'
+			RETURN;
+	END		
+END
+
+DECLARE @result1 VARCHAR(100)
+EXEC update_emp_sal_sp  103, 220000,@result1 OUTPUT
+SELECT @result1
+
+SELECT * FROM employees
+
+------------------------------USER DEFINED FUNCTION-------------------------------
+
+CREATE FUNCTION dob_sal(
+@p_num NUMERIC (10,2)
+)
+RETURNS NUMERIC(10,2)
+AS
+BEGIN
+ DECLARE @result2 NUMERIC(10,2)
+ SET @result2 = @p_num * 2
+ RETURN @result2
+END
+
+SELECT dbo.dob_sal(200)
+SELECT fname, salary, dbo.dob_sal(salary)
+FROM employees
+
+--------------------------------ITVF INLINE TABLE VALUE FUNCTION-----------------------
+
+--find name  OF THE EMPLOYES IN EACH DEPARTMENT
+/*CREATE FUNCTION dept_max_salary (
+
+@p_dept VARCHAR(100)
+
+)
+RETURNS TABLE
+AS
+RETURN (
+SELECT * FROM employees WHERE department = @p_dept AND 
+salary = ( SELECT MAX(salary) FROM employees 
+           WHERE department = @p_dept
+		 )
+)
+
+SELECT * FROM  dbo.dept_max_salary('Design')     */                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+-------
+
+CREATE FUNCTION dept_max_sal (
+@p_dept VARCHAR(100)
+)
+RETURNS TABLE
+AS 
+RETURN(
+SELECT * FROM employees WHERE department = @p_dept AND salary = (
+		SELECT MAX(salary) FROM employees WHERE department = @p_dept
+		
+		)
+	 )
+	 
+SELECT * FROM dbo.dept_max_sal('HUMAN RESOURCES')
